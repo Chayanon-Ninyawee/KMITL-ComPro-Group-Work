@@ -1,8 +1,8 @@
-# KMITL Computer Programming Group. 39 (Segmentation Fault)
+# KMITL Computer Programming Group. 26 (Segmentation Fault)
 
 This is a repo for KMITL Computer Programming.
 
-- Group: 39
+- Group: 26
 - Team Name: Segmentation Fault
 
 ## Team Members
