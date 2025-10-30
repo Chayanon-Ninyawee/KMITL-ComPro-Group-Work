@@ -1,10 +1,18 @@
 #include <Arduino.h>
 
+#include <Servo.h>
+
 #include "gyro_tracker.h"
 
-const byte BUTTON_PIN = 10;
+constexpr byte BUTTON_PIN = 10;
+
+constexpr byte SERVO_PIN = A0;
+constexpr double SERVO_MIN = 20;
+constexpr double SERVO_MAX = 140;
 
 GyroTracker tracker;
+
+Servo armServo;
 
 void panic() {
     while (true) {
@@ -16,8 +24,12 @@ void panic() {
 void setup() {
     Serial.begin(115200);
 
+    armServo.attach(SERVO_PIN);
+
     pinMode(BUTTON_PIN, INPUT_PULLUP);
     delay(100);
+
+    armServo.write(SERVO_MAX);
 
     // Wait for the button press to start the gyro calibration
     while (digitalRead(BUTTON_PIN)) {
@@ -48,6 +60,8 @@ void loop() {
 
     Serial.print("Yaw: ");
     Serial.println(currentYaw, 2);
+
+    armServo.write(SERVO_MIN);
 
     delay(5);
 }
