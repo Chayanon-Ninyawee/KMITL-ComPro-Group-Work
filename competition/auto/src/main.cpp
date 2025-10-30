@@ -2,6 +2,8 @@
 
 #include "gyro_tracker.h"
 
+const byte BUTTON_PIN = 10;
+
 GyroTracker tracker;
 
 void panic() {
@@ -14,9 +16,14 @@ void panic() {
 void setup() {
     Serial.begin(115200);
 
-    // while (!Serial) {
-    //     delay(100);
-    // }
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    delay(100);
+
+    // Wait for the button press to start the gyro calibration
+    while (digitalRead(BUTTON_PIN)) {
+        delay(100);
+    }
+    delay(500);
 
     if (!tracker.begin()) {
         Serial.println("ERROR: BMI160 initialization failed! Check wiring.");
@@ -27,6 +34,12 @@ void setup() {
     tracker.calibrate(500);  // Calibrate using 500 samples
     Serial.print("Yaw tracking started. Offset used (LSB): ");
     Serial.println(tracker.getOffset());
+
+    // Wait for the button press to start the robot
+    while (digitalRead(BUTTON_PIN)) {
+        delay(100);
+    }
+    delay(500);
 }
 
 void loop() {
