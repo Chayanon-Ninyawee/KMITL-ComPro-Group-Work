@@ -19,7 +19,7 @@ static void static_isr_wrapper() {
 // --- End Static ISR Wrapper ---
 
 GyroTracker::GyroTracker()
-    : yaw(0.0)
+    : heading(0.0)
     , gyroOffsetZ(0.0)
     , interruptTime(0)
     , newDataAvailable(false)
@@ -85,13 +85,13 @@ void GyroTracker::calibrate(int samples) {
     }
 
     // Calculate the average stationary reading (the drift offset) in raw LSB units
-    gyroOffsetZ = (float)gzSum / samples;
+    gyroOffsetZ = (double)gzSum / samples;
 
     Serial.print("Calibration complete. Gyro offset Z (LSB): ");
     Serial.println(gyroOffsetZ);
 
     // Reset yaw and timekeeping to start fresh
-    yaw = 0.0;
+    heading = 0.0;
     lastInterruptTime = 0;
     newDataAvailable = false;
 }
@@ -146,35 +146,35 @@ void GyroTracker::update() {
     }
 
     // 2. Calculate time delta (dt) in seconds since the *last interrupt*
-    float dt = (now - lastInterruptTime) / 1000000.0;
+    double dt = (now - lastInterruptTime) / 1000000.0;
     lastInterruptTime = now;
 
     // 3. Subtract the calculated offset from the raw reading (LSB)
-    float gz_raw_compensated = (float)gz_local - gyroOffsetZ;
+    double gz_raw_compensated = (double)gz_local - gyroOffsetZ;
 
     // 4. Convert the compensated raw reading to angular velocity (deg/s)
-    float angularVelocityZ = gz_raw_compensated / LSB_PER_DEG_S;
+    double angularVelocityZ = gz_raw_compensated / LSB_PER_DEG_S;
 
     // 5. Integrate (multiply angular velocity by time) to get the angle change
-    yaw += angularVelocityZ * dt * 1.0035;
+    heading += angularVelocityZ * dt * 1.0035;
 
     // 6. Keep yaw constrained within the 0–360 degree range
-    if (yaw >= 360.0) {
-        yaw -= 360.0;
-    } else if (yaw < 0.0) {
-        yaw += 360.0;
+    if (heading >= 360.0) {
+        heading -= 360.0;
+    } else if (heading < 0.0) {
+        heading += 360.0;
     }
 }
 
-float GyroTracker::getHeading() const {
+double GyroTracker::getHeading() const {
     // It's good practice to disable interrupts when reading multi-byte
-    // variables that can be written by an ISR, but 'yaw' (a float)
+    // variables that can be written by an ISR, but 'heading' (a double)
     // is only written by update(), which is in the main loop.
-    // If 'yaw' were written by the ISR, we would need to protect this read.
+    // If 'heading' were written by the ISR, we would need to protect this read.
     // Since it's only written by update(), this is safe.
-    return yaw;
+    return heading;
 }
 
-float GyroTracker::getOffset() const {
+double GyroTracker::getOffset() const {
     return gyroOffsetZ;
 }

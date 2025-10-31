@@ -1,6 +1,5 @@
 #include <Arduino.h>
 
-#include <HCSR04.h>
 #include <Servo.h>
 #define __ARDUINO__
 #include <ustd_functional.h>
@@ -8,7 +7,7 @@
 #include "gyro_tracker.h"
 #include "motor_controller.h"
 
-constexpr byte BUTTON_PIN = 10;
+constexpr byte BUTTON_PIN = 12;
 
 constexpr byte SERVO_PIN = A0;
 constexpr double SERVO_MIN = 20;
@@ -19,12 +18,11 @@ constexpr byte MOTOR_LEFT_2 = 8;
 constexpr byte MOTOR_LEFT_EN = 6;
 
 constexpr byte MOTOR_RIGHT_1 = 4;
-constexpr byte MOTOR_RIGHT_2 = 5;
-constexpr byte MOTOR_RIGHT_EN = 3;
+constexpr byte MOTOR_RIGHT_2 = 10;
+constexpr byte MOTOR_RIGHT_EN = 5;
 
-const byte TRIGGER_PIN = 11;
-const byte ECHO_COUNT = 1;
-byte *ECHO_PINS = new byte[ECHO_COUNT]{12};
+constexpr byte TRIGGER_PIN = 11;
+constexpr byte ECHO_PIN = 3;
 
 GyroTracker gyro;
 Servo armServo;
@@ -36,9 +34,10 @@ MotorController robotMotors(MOTOR_LEFT_1, MOTOR_LEFT_2, MOTOR_LEFT_EN, MOTOR_RIG
  * to the active step.
  */
 struct RobotData {
-    float ultrasonicDistance;
-    float heading;
+    double ultrasonicDistance;
+    double heading;
 };
+constexpr double ULTRASONIC_DISTANCE_SENTINEL_VALUE = -1.0;
 
 /**
  * @brief Holds all "read/write" state for the robot.
@@ -101,12 +100,12 @@ SequenceStep script_l[] = {
     // Sequence: 0
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
-            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
         }
 
         moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
 
-        if (data.ultrasonicDistance <= 0.05) {
+        if (data.ultrasonicDistance <= 0.05 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
             robotMotors.stop();
             robotState->targetHeading -= 90.0;
             robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
@@ -136,12 +135,12 @@ SequenceStep script_l[] = {
     // Sequence: 2
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
-            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
         }
 
         moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
 
-        if (data.ultrasonicDistance <= 0.25) {
+        if (data.ultrasonicDistance <= 0.25 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
             robotMotors.stop();
             robotState->targetHeading += 90.0;
             robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
@@ -171,12 +170,12 @@ SequenceStep script_l[] = {
     // Sequence: 4
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
-            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
         }
 
         moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
 
-        if (data.ultrasonicDistance <= 0.45) {
+        if (data.ultrasonicDistance <= 0.45 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
             robotMotors.stop();
             robotState->targetHeading -= 90.0;
             robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
@@ -212,7 +211,7 @@ SequenceStep script_l[] = {
             sequenceState->isFirstRun = false;
         }
 
-        if (millis() - sequenceState->stepStartTime <= 1000) {
+        if (millis() - sequenceState->stepStartTime >= 1000) {
             return true;
         }
 
@@ -222,12 +221,12 @@ SequenceStep script_l[] = {
     // Sequence: 7
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
-            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
         }
 
         moveWithHeading(data.heading, robotState->targetHeading, -150, 10.0);
 
-        if (data.ultrasonicDistance >= 0.30) {
+        if (data.ultrasonicDistance >= 0.30 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
             robotMotors.stop();
             return true;
         }
@@ -244,7 +243,7 @@ SequenceStep script_l[] = {
             sequenceState->isFirstRun = false;
         }
 
-        if (millis() - sequenceState->stepStartTime <= 1000) {
+        if (millis() - sequenceState->stepStartTime >= 1000) {
             return true;
         }
 
@@ -254,12 +253,12 @@ SequenceStep script_l[] = {
     // Sequence: 9
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
-            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
         }
 
         moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
 
-        if (data.ultrasonicDistance <= 0.05) {
+        if (data.ultrasonicDistance <= 0.05 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
             robotMotors.stop();
             return true;
         }
@@ -285,11 +284,34 @@ RobotState robotState;        // The state for the robot
 
 bool sequenceDone = false;  // Flag to stop processing
 
+// --- Volatile variables ---
+// These are shared between the main loop and the Interrupt Service Routine (ISR)
+// 'volatile' tells the compiler that these variables can change unexpectedly.
+volatile unsigned long pulseStartTime = 0;
+volatile unsigned long pulseDuration = 0;
+volatile boolean newReadingAvailable = false;
+void isrHandleEcho() {
+    // Check if the pin just went HIGH
+    if (digitalRead(ECHO_PIN) == HIGH) {
+        pulseStartTime = micros();  // Record the start time
+    }
+    // Otherwise, the pin must have just gone LOW
+    else
+    {
+        pulseDuration = micros() - pulseStartTime;  // Calculate the pulse duration
+        newReadingAvailable = true;                 // Set the flag for the main loop
+    }
+}
+
 void setup() {
     Serial.begin(115200);
 
+    pinMode(TRIGGER_PIN, OUTPUT);
+    pinMode(ECHO_PIN, INPUT);
+    attachInterrupt(digitalPinToInterrupt(ECHO_PIN), isrHandleEcho, CHANGE);
+
     armServo.attach(SERVO_PIN);
-    HCSR04.begin(TRIGGER_PIN, ECHO_PINS, ECHO_COUNT);
+
     robotMotors.begin();
 
     pinMode(BUTTON_PIN, INPUT_PULLUP);
@@ -321,6 +343,8 @@ void setup() {
     delay(500);
 }
 
+unsigned long lastTriggerTime = 0;
+
 void loop() {
     if (sequenceDone) {
         // The script is finished, do nothing.
@@ -330,14 +354,40 @@ void loop() {
     gyro.update();
     robotData.heading = gyro.getHeading();
 
-    robotData.ultrasonicDistance = *HCSR04.measureDistanceCm();
+    unsigned long currentMillis = millis();
+    if (currentMillis - lastTriggerTime >= 60) {
+        lastTriggerTime = currentMillis;  // Update the last trigger time
+
+        // Send the 10-microsecond trigger pulse
+        digitalWrite(TRIGGER_PIN, LOW);
+        delayMicroseconds(2);
+        digitalWrite(TRIGGER_PIN, HIGH);
+        delayMicroseconds(10);
+        digitalWrite(TRIGGER_PIN, LOW);
+    }
+    if (newReadingAvailable) {
+        unsigned long duration;  // Local variable to hold the duration
+
+        // --- Critical Section ---
+        // Disable interrupts temporarily to safely copy the volatile variable
+        noInterrupts();
+        duration = pulseDuration;
+        newReadingAvailable = false;  // Clear the flag
+        interrupts();
+        // -----------------------
+
+        // Calculate the distance in meters
+        // Sound speed = 343 m/s = 0.000343 m/us
+        // Distance = (Duration * Speed of Sound) / 2 (for round trip)
+        robotData.ultrasonicDistance = (duration * 0.000343) / 2.0;
+    }
 
     // Serial.print("Heading: ");
     // Serial.println(robotData.heading, 2);  // Print to 2 decimal places
 
-    // Serial.print("Ultrasonic Distance: ");
-    // Serial.print(robotData.ultrasonicDistance);
-    // Serial.println(" cm");
+    Serial.print("Ultrasonic Distance: ");
+    Serial.print(robotData.ultrasonicDistance);
+    Serial.println(" cm");
 
     SequenceStep &step = script_l[currentStep];
     bool isStepFinished = step.run(robotData, &robotState, &sequenceState);
