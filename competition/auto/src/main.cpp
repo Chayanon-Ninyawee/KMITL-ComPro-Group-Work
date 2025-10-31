@@ -96,17 +96,17 @@ void moveWithHeading(double currentHeading, double targetHeading, int speed, dou
     robotMotors.move(leftSpeed, rightSpeed);
 }
 
-SequenceStep script[] = {
+SequenceStep script_l[] = {
 
+    // Sequence: 0
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
             sequenceState->stepStartTime = millis();
-            sequenceState->isFirstRun = false;
         }
 
-        moveWithHeading(data.heading, robotState->targetHeading, 200, 10.0);
+        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
 
-        if (millis() - sequenceState->stepStartTime >= 2000) {
+        if (data.ultrasonicDistance <= 0.05) {
             robotMotors.stop();
             robotState->targetHeading -= 90.0;
             robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
@@ -116,9 +116,10 @@ SequenceStep script[] = {
         return false;
     }},
 
+    // Sequence: 1
     {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
         if (sequenceState->isFirstRun) {
-            robotMotors.move(-80, 80);
+            robotMotors.move(-100, 100);
             sequenceState->isFirstRun = false;
         }
 
@@ -126,7 +127,140 @@ SequenceStep script[] = {
         diff = fmod(diff + 180.0, 360.0) - 180.0f;
         if (abs(diff) <= 25.0) {
             robotMotors.stop();
-            sequenceState->nextSequence = 0;
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 2
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            sequenceState->stepStartTime = millis();
+        }
+
+        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
+
+        if (data.ultrasonicDistance <= 0.25) {
+            robotMotors.stop();
+            robotState->targetHeading += 90.0;
+            robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 3
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            robotMotors.move(100, -100);
+            sequenceState->isFirstRun = false;
+        }
+
+        float diff = data.heading - robotState->targetHeading;
+        diff = fmod(diff + 180.0, 360.0) - 180.0f;
+        if (abs(diff) <= 25.0) {
+            robotMotors.stop();
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 4
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            sequenceState->stepStartTime = millis();
+        }
+
+        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
+
+        if (data.ultrasonicDistance <= 0.45) {
+            robotMotors.stop();
+            robotState->targetHeading -= 90.0;
+            robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 5
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            robotMotors.move(-100, 100);
+            sequenceState->isFirstRun = false;
+        }
+
+        float diff = data.heading - robotState->targetHeading;
+        diff = fmod(diff + 180.0, 360.0) - 180.0f;
+        if (abs(diff) <= 25.0) {
+            robotMotors.stop();
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 6
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            robotMotors.stop();
+            armServo.write(SERVO_MIN);
+            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
+        }
+
+        if (millis() - sequenceState->stepStartTime <= 1000) {
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 7
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            sequenceState->stepStartTime = millis();
+        }
+
+        moveWithHeading(data.heading, robotState->targetHeading, -150, 10.0);
+
+        if (data.ultrasonicDistance >= 0.30) {
+            robotMotors.stop();
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 8
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            robotMotors.stop();
+            armServo.write(SERVO_MAX);
+            sequenceState->stepStartTime = millis();
+            sequenceState->isFirstRun = false;
+        }
+
+        if (millis() - sequenceState->stepStartTime <= 1000) {
+            return true;
+        }
+
+        return false;
+    }},
+
+    // Sequence: 9
+    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+        if (sequenceState->isFirstRun) {
+            sequenceState->stepStartTime = millis();
+        }
+
+        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
+
+        if (data.ultrasonicDistance <= 0.05) {
+            robotMotors.stop();
             return true;
         }
 
@@ -141,7 +275,7 @@ SequenceStep script[] = {
         return true;  // This step is done immediately
     }}
 };
-const int NUM_STEPS = sizeof(script) / sizeof(script[0]);
+const int NUM_STEPS = sizeof(script_l) / sizeof(script_l[0]);
 
 // --- Global State Variables ---
 int currentStep = 0;          // The index of the step we are on
@@ -205,7 +339,7 @@ void loop() {
     // Serial.print(robotData.ultrasonicDistance);
     // Serial.println(" cm");
 
-    SequenceStep &step = script[currentStep];
+    SequenceStep &step = script_l[currentStep];
     bool isStepFinished = step.run(robotData, &robotState, &sequenceState);
     if (isStepFinished) {
         Serial.print("Finished Step: ");
