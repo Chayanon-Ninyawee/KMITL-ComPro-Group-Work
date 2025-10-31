@@ -1,3 +1,5 @@
 OldVersions/
 .cache/
 .pio/
+
+**/compile_commands.json
