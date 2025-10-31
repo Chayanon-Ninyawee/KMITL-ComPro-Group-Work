@@ -55,17 +55,17 @@ public:
      * @brief Returns the current yaw angle.
      * @return The yaw angle in degrees (0.0 to 360.0).
      */
-    float getHeading() const;
+    double getHeading() const;
 
     /**
      * @brief Returns the calculated raw Z-axis offset (in LSB units).
      * @return The Z-axis drift offset.
      */
-    float getOffset() const;
+    double getOffset() const;
 
 private:
-    float yaw;
-    float gyroOffsetZ;  // Stored in raw LSB units
+    double heading;
+    double gyroOffsetZ;  // Stored in raw LSB units
 
     // --- Volatile variables ---
     // These are modified by the ISR (isr()) and read by the main loop (update())
@@ -76,5 +76,5 @@ private:
     unsigned long lastInterruptTime;
 
     // Conversion factor for ±250°/s range (131.0 LSB/°/s)
-    static constexpr float LSB_PER_DEG_S = 131.0;
+    static constexpr double LSB_PER_DEG_S = 131.0;
 };
