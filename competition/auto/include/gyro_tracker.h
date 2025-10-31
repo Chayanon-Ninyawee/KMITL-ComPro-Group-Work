@@ -55,7 +55,7 @@ public:
      * @brief Returns the current yaw angle.
      * @return The yaw angle in degrees (0.0 to 360.0).
      */
-    float getYaw() const;
+    float getHeading() const;
 
     /**
      * @brief Returns the calculated raw Z-axis offset (in LSB units).

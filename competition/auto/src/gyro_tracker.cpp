@@ -82,7 +82,6 @@ void GyroTracker::calibrate(int samples) {
         newDataAvailable = false;
 
         gzSum += gz_local;
-        delay(2);  // Small delay between samples
     }
 
     // Calculate the average stationary reading (the drift offset) in raw LSB units
@@ -167,7 +166,7 @@ void GyroTracker::update() {
     }
 }
 
-float GyroTracker::getYaw() const {
+float GyroTracker::getHeading() const {
     // It's good practice to disable interrupts when reading multi-byte
     // variables that can be written by an ISR, but 'yaw' (a float)
     // is only written by update(), which is in the main loop.
