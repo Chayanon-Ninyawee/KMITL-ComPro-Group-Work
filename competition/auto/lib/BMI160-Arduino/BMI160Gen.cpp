@@ -81,6 +81,7 @@ void BMI160GenClass::i2c_init()
 #endif // DEBUG
 
   Wire.begin();
+  Wire.setClock(50000);
   Wire.beginTransmission(i2c_addr);
   if( Wire.endTransmission() != 0 )
       Serial.println("BMI160GenClass::i2c_init(): I2C failed.");
