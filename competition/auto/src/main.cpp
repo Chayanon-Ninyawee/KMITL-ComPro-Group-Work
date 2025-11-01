@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <avr/pgmspace.h>
 
 #include <Servo.h>
 #define __ARDUINO__
@@ -23,6 +24,22 @@ constexpr byte MOTOR_RIGHT_EN = 5;
 
 constexpr byte TRIGGER_PIN = 11;
 constexpr byte ECHO_PIN = 3;
+
+constexpr int FULL_BATTERY_FORWARD_SPEED = 130;
+constexpr int FULL_BATTERY_BACKWARD_SPEED = -130;
+constexpr int FULL_BATTERY_TURN_SPEED = 100;
+constexpr double FULL_BATTERY_ULTRASONIC_DISTANCE = 0.065;
+
+constexpr int MID_BATTERY_FORWARD_SPEED = 150;
+constexpr int MID_BATTERY_BACKWARD_SPEED = -150;
+constexpr int MID_BATTERY_TURN_SPEED = 100;
+constexpr double MID_BATTERY_ULTRASONIC_DISTANCE = 0.06;
+
+// NOTE: Change this according to battery level
+constexpr int FORWARD_SPEED = FULL_BATTERY_FORWARD_SPEED;
+constexpr int BACKWARD_SPEED = FULL_BATTERY_BACKWARD_SPEED;
+constexpr int TURN_SPEED = FULL_BATTERY_TURN_SPEED;
+constexpr double ULTRASONIC_DISTANCE = FULL_BATTERY_ULTRASONIC_DISTANCE;
 
 GyroTracker gyro;
 Servo armServo;
@@ -57,6 +74,8 @@ struct SequenceState {
     size_t nextSequence = -1;
 };
 
+typedef bool (*StepFunc)(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
+
 /**
  * @brief A single step in the sequence.
  * It holds one function that contains all logic for that step.
@@ -66,7 +85,8 @@ struct SequenceState {
  * @return      true when the step is finished, false to keep running.
  */
 struct SequenceStep {
-    ustd::function<bool(const RobotData &data, RobotState *robotState, SequenceState *sequenceState)> run;
+    // ustd::function<bool(const RobotData &data, RobotState *robotState, SequenceState *sequenceState)> run;
+    StepFunc run;
 };
 
 void panic() {
@@ -95,185 +115,433 @@ void moveWithHeading(double currentHeading, double targetHeading, int speed, dou
     robotMotors.move(leftSpeed, rightSpeed);
 }
 
-SequenceStep script_l[] = {
+/**
+ * @brief Helper function for turning in place to the target heading.
+ * @return true when the step is complete (heading is reached).
+ */
+bool helper_turnToHeading(const RobotData &data, RobotState *robotState, SequenceState *sequenceState, int leftSpeed, int rightSpeed) {
+    if (sequenceState->isFirstRun) {
+        robotMotors.move(leftSpeed, rightSpeed);
+        sequenceState->isFirstRun = false;
+    }
 
-    // Sequence: 0
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            sequenceState->isFirstRun = false;
-        }
+    // Calculate the shortest difference between current and target heading
+    float diff = data.heading - robotState->targetHeading;
+    diff = fmod(diff + 180.0, 360.0) - 180.0f;
 
-        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
+    // Check if we are within the tolerance
+    if (abs(diff) <= 35.0) {
+        robotMotors.stop();
+        return true;  // Step is complete
+    }
+    return false;  // Step is not complete
+}
 
-        if (data.ultrasonicDistance <= 0.05 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
-            robotMotors.stop();
-            robotState->targetHeading -= 90.0;
-            robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
-            return true;
-        }
+/**
+ * @brief Helper function for moving until an obstacle is detected, then turning.
+ * @param turnAngle The angle to add to targetHeading (-90 for left, 90 for right).
+ * @return true when the step is complete (obstacle found).
+ */
+bool helper_moveTillObstacle(const RobotData &data, RobotState *robotState, SequenceState *sequenceState, float turnAngle) {
+    if (sequenceState->isFirstRun) {
+        sequenceState->isFirstRun = false;
+    }
 
-        return false;
-    }},
+    // Continuously move forward with heading correction
+    moveWithHeading(data.heading, robotState->targetHeading, FORWARD_SPEED, 10.0);
 
-    // Sequence: 1
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            robotMotors.move(-100, 100);
-            sequenceState->isFirstRun = false;
-        }
+    // Check for obstacle
+    if (data.ultrasonicDistance <= ULTRASONIC_DISTANCE && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
+        robotMotors.stop();
+        // Set new target heading for the *next* step
+        robotState->targetHeading += turnAngle;
+        robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
+        return true;  // Step is complete
+    }
+    return false;  // Step is not complete
+}
 
-        float diff = data.heading - robotState->targetHeading;
-        diff = fmod(diff + 180.0, 360.0) - 180.0f;
-        if (abs(diff) <= 25.0) {
-            robotMotors.stop();
-            return true;
-        }
+/**
+ * @brief Helper function for moving forward for a set duration, then turning.
+ * @param duration The time to move forward (in milliseconds).
+ * @param turnAngle The angle to add to targetHeading (-90 for left, 90 for right).
+ * @return true when the step is complete (time has elapsed).
+ */
+bool helper_moveForTime(
+    const RobotData &data,
+    RobotState *robotState,
+    SequenceState *sequenceState,
+    unsigned long duration,
+    float turnAngle
+) {
+    if (sequenceState->isFirstRun) {
+        sequenceState->stepStartTime = millis();
+        sequenceState->isFirstRun = false;
+    }
 
-        return false;
-    }},
+    moveWithHeading(data.heading, robotState->targetHeading, FORWARD_SPEED, 10.0);
 
-    // Sequence: 2
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            sequenceState->isFirstRun = false;
-        }
+    if (millis() - sequenceState->stepStartTime >= duration) {
+        robotMotors.stop();
+        // Set new target heading for the *next* step
+        robotState->targetHeading += turnAngle;
+        robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
+        return true;
+    }
+    return false;
+}
 
-        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
+/**
+ * @brief Helper function for a simple timed wait.
+ * @param duration The time to wait (in milliseconds).
+ * @return true when the step is complete (time has elapsed).
+ */
+bool helper_wait(const RobotData &data, RobotState *robotState, SequenceState *sequenceState, unsigned long duration) {
+    if (sequenceState->isFirstRun) {
+        sequenceState->stepStartTime = millis();
+        sequenceState->isFirstRun = false;
+    }
 
-        if (data.ultrasonicDistance <= 0.25 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
-            robotMotors.stop();
-            robotState->targetHeading += 90.0;
-            robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
-            return true;
-        }
+    if (millis() - sequenceState->stepStartTime >= duration) {
+        return true;
+    }
+    return false;
+}
 
-        return false;
-    }},
+/**
+ * @brief Helper function to set servo position and wait.
+ * @param servoPosition The target position for the servo (e.g., SERVO_MIN).
+ * @param duration The time to wait (in milliseconds).
+ * @return true when the step is complete (time has elapsed).
+ */
+bool helper_setServo(
+    const RobotData &data,
+    RobotState *robotState,
+    SequenceState *sequenceState,
+    int servoPosition,
+    unsigned long duration
+) {
+    if (sequenceState->isFirstRun) {
+        robotMotors.stop();  // Good practice to stop motors
+        armServo.write(servoPosition);
+        sequenceState->stepStartTime = millis();
+        sequenceState->isFirstRun = false;
+    }
 
-    // Sequence: 3
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            robotMotors.move(100, -100);
-            sequenceState->isFirstRun = false;
-        }
+    if (millis() - sequenceState->stepStartTime >= duration) {
+        return true;
+    }
+    return false;
+}
 
-        float diff = data.heading - robotState->targetHeading;
-        diff = fmod(diff + 180.0, 360.0) - 180.0f;
-        if (abs(diff) <= 25.0) {
-            robotMotors.stop();
-            return true;
-        }
+/**
+ * @brief Helper function to move backward using heading control for a duration.
+ * @param duration The time to move (in milliseconds).
+ * @return true when the step is complete (time has elapsed).
+ */
+bool helper_moveBackwardHeading(const RobotData &data, RobotState *robotState, SequenceState *sequenceState, unsigned long duration) {
+    if (sequenceState->isFirstRun) {
+        sequenceState->stepStartTime = millis();
+        sequenceState->isFirstRun = false;
+    }
 
-        return false;
-    }},
+    // Move backward with heading correction
+    moveWithHeading(data.heading, robotState->targetHeading, BACKWARD_SPEED, 10.0);
 
-    // Sequence: 4
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            sequenceState->isFirstRun = false;
-        }
+    if (millis() - sequenceState->stepStartTime >= duration) {
+        robotMotors.stop();
+        return true;
+    }
+    return false;
+}
 
-        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
+/**
+ * @brief Helper function to move backward with raw motor commands for a duration.
+ * @param duration The time to move (in milliseconds).
+ * @return true when the step is complete (time has elapsed).
+ */
+bool helper_moveBackwardRaw(const RobotData &data, RobotState *robotState, SequenceState *sequenceState, unsigned long duration) {
+    if (sequenceState->isFirstRun) {
+        robotMotors.move(-100, -100);
+        sequenceState->stepStartTime = millis();
+        sequenceState->isFirstRun = false;
+    }
 
-        if (data.ultrasonicDistance <= 0.45 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
-            robotMotors.stop();
-            robotState->targetHeading -= 90.0;
-            robotState->targetHeading = fmod(robotState->targetHeading, 360.0);
-            return true;
-        }
+    if (millis() - sequenceState->stepStartTime >= duration) {
+        robotMotors.stop();
+        return true;
+    }
+    return false;
+}
 
-        return false;
-    }},
+/**
+ * @brief Helper function to wait and then reset the gyro.
+ * @param duration The time to wait (in milliseconds).
+ * @return true when the step is complete (time has elapsed).
+ */
+bool helper_waitAndResetGyro(
+    const RobotData &data,
+    RobotState *robotState,
+    SequenceState *sequenceState,
+    unsigned long duration,
+    double resettedHeading
+) {
+    if (sequenceState->isFirstRun) {
+        sequenceState->stepStartTime = millis();
+        sequenceState->isFirstRun = false;
+    }
 
-    // Sequence: 5
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            robotMotors.move(-100, 100);
-            sequenceState->isFirstRun = false;
-        }
+    if (millis() - sequenceState->stepStartTime >= duration) {
+        gyro.resetHeading(resettedHeading);
+        return true;
+    }
+    return false;
+}
 
-        float diff = data.heading - robotState->targetHeading;
-        diff = fmod(diff + 180.0, 360.0) - 180.0f;
-        if (abs(diff) <= 25.0) {
-            robotMotors.stop();
-            return true;
-        }
+/**
+ * @brief Helper function to stop all motors.
+ * @return true (step is complete immediately).
+ */
+bool helper_stop(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    if (sequenceState->isFirstRun) {
+        robotMotors.stop();
+        sequenceState->isFirstRun = false;
+    }
+    return true;  // This step is done immediately
+}
 
-        return false;
-    }},
+bool seq_0(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 500);
+}
+bool seq_1(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_2(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_3(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveForTime(data, robotState, sequenceState, 700, 90.0);
+}
+bool seq_4(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_5(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveForTime(data, robotState, sequenceState, 750, -90.0);
+}
+bool seq_6(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_7(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_setServo(data, robotState, sequenceState, SERVO_MIN, 1000);
+}
+bool seq_8(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveBackwardHeading(data, robotState, sequenceState, 800);
+}
+bool seq_9(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 2000);
+}
+bool seq_10(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_11(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_12(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_13(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_14(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_15(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_16(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_17(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_18(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveBackwardRaw(data, robotState, sequenceState, 600);
+}
+bool seq_19(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_waitAndResetGyro(data, robotState, sequenceState, 400, 0.0);
+}
+bool seq_20(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_21(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_22(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_23(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_24(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_25(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveForTime(data, robotState, sequenceState, 600, 90.0);
+}
+bool seq_26(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_27(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_28(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_29(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_30(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_31(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_32(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_33(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_34(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_35(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_36(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_37(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_setServo(data, robotState, sequenceState, SERVO_MIN, 2000);
+}
+bool seq_38(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveBackwardHeading(data, robotState, sequenceState, 800);
+}
+bool seq_39(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_40(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 1000);
+}
+bool seq_41(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_42(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveBackwardRaw(data, robotState, sequenceState, 600);
+}
+bool seq_43(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_waitAndResetGyro(data, robotState, sequenceState, 400, 0.0);
+}
+bool seq_44(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_45(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_46(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_47(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_48(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_49(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_50(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveForTime(data, robotState, sequenceState, 1300, 90.0);
+}
+bool seq_51(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_52(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_53(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_54(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_55(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_56(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_57(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_58(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_59(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_60(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveBackwardRaw(data, robotState, sequenceState, 600);
+}
+bool seq_61(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_waitAndResetGyro(data, robotState, sequenceState, 400, 180.0);
+}
+bool seq_62(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+}
+bool seq_63(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_64(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_65(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveForTime(data, robotState, sequenceState, 750, -90.0);
+}
+bool seq_66(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
+}
+bool seq_67(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveBackwardRaw(data, robotState, sequenceState, 600);
+}
+bool seq_68(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_waitAndResetGyro(data, robotState, sequenceState, 400, 0.0);
+}
+bool seq_69(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);
+}
+bool seq_70(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);
+}
+bool seq_71(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_wait(data, robotState, sequenceState, 300);
+}
+bool seq_72(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_moveTillObstacle(data, robotState, sequenceState, 0.0);
+}
+// NOTE: The final step (stop)
+bool seq_73(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
+    return helper_stop(data, robotState, sequenceState);
+}
 
-    // Sequence: 6
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            robotMotors.stop();
-            armServo.write(SERVO_MIN);
-            sequenceState->stepStartTime = millis();
-            sequenceState->isFirstRun = false;
-        }
-
-        if (millis() - sequenceState->stepStartTime >= 1000) {
-            return true;
-        }
-
-        return false;
-    }},
-
-    // Sequence: 7
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            sequenceState->isFirstRun = false;
-        }
-
-        moveWithHeading(data.heading, robotState->targetHeading, -150, 10.0);
-
-        if (data.ultrasonicDistance >= 0.30 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
-            robotMotors.stop();
-            return true;
-        }
-
-        return false;
-    }},
-
-    // Sequence: 8
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            robotMotors.stop();
-            armServo.write(SERVO_MAX);
-            sequenceState->stepStartTime = millis();
-            sequenceState->isFirstRun = false;
-        }
-
-        if (millis() - sequenceState->stepStartTime >= 1000) {
-            return true;
-        }
-
-        return false;
-    }},
-
-    // Sequence: 9
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            sequenceState->isFirstRun = false;
-        }
-
-        moveWithHeading(data.heading, robotState->targetHeading, 150, 10.0);
-
-        if (data.ultrasonicDistance <= 0.05 && data.ultrasonicDistance != ULTRASONIC_DISTANCE_SENTINEL_VALUE) {
-            robotMotors.stop();
-            return true;
-        }
-
-        return false;
-    }},
-
-    {[](const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-        if (sequenceState->isFirstRun) {
-            robotMotors.stop();
-            sequenceState->isFirstRun = false;
-        }
-        return true;  // This step is done immediately
-    }}
-};
+const SequenceStep script_l[] = {{seq_0},  {seq_1},  {seq_2},  {seq_3},  {seq_4},  {seq_5},  {seq_6},  {seq_7},  {seq_8},  {seq_9},
+                                 {seq_10}, {seq_11}, {seq_12}, {seq_13}, {seq_14}, {seq_15}, {seq_16}, {seq_17}, {seq_18}, {seq_19},
+                                 {seq_20}, {seq_21}, {seq_22}, {seq_23}, {seq_24}, {seq_25}, {seq_26}, {seq_27}, {seq_28}, {seq_29},
+                                 {seq_30}, {seq_31}, {seq_32}, {seq_33}, {seq_34}, {seq_35}, {seq_36}, {seq_37}, {seq_38}, {seq_39},
+                                 {seq_40}, {seq_41}, {seq_42}, {seq_43}, {seq_44}, {seq_45}, {seq_46}, {seq_47}, {seq_48}, {seq_49},
+                                 {seq_50}, {seq_51}, {seq_52}, {seq_53}, {seq_54}, {seq_55}, {seq_56}, {seq_57}, {seq_58}, {seq_59},
+                                 {seq_60}, {seq_61}, {seq_62}, {seq_63}, {seq_64}, {seq_65}, {seq_66}, {seq_67}, {seq_68}, {seq_69},
+                                 {seq_70}, {seq_71}, {seq_72}, {seq_73}};
 const int NUM_STEPS = sizeof(script_l) / sizeof(script_l[0]);
 
 // --- Global State Variables ---
@@ -323,7 +591,7 @@ void setup() {
     while (digitalRead(BUTTON_PIN)) {
         delay(100);
     }
-    delay(500);
+    delay(1000);
 
     if (!gyro.begin()) {
         Serial.println("ERROR: BMI160 initialization failed! Check wiring.");
@@ -389,7 +657,7 @@ void loop() {
     Serial.print(robotData.ultrasonicDistance);
     Serial.println(" cm");
 
-    SequenceStep &step = script_l[currentStep];
+    const SequenceStep &step = script_l[currentStep];
     bool isStepFinished = step.run(robotData, &robotState, &sequenceState);
     if (isStepFinished) {
         Serial.print("Finished Step: ");

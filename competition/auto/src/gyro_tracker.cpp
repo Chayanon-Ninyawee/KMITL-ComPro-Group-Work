@@ -96,6 +96,10 @@ void GyroTracker::calibrate(int samples) {
     newDataAvailable = false;
 }
 
+void GyroTracker::resetHeading(double resettedHeading) {
+    heading = resettedHeading;
+}
+
 /**
  * @brief Interrupt Service Routine.
  * This function is called by the hardware interrupt (via the static wrapper)
