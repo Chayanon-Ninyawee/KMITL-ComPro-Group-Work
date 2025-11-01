@@ -2,8 +2,6 @@
 #include <avr/pgmspace.h>
 
 #include <Servo.h>
-#define __ARDUINO__
-#include <ustd_functional.h>
 
 #include "gyro_tracker.h"
 #include "motor_controller.h"
