@@ -35,6 +35,8 @@ public:
      */
     void calibrate(int samples = 500);
 
+    void resetHeading(double resettedHeading = 0.0);
+
     /**
      * @brief This is the Interrupt Service Routine (ISR) callback.
      * It just sets a flag for the main loop to process.
