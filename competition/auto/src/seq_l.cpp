@@ -28,7 +28,7 @@ bool seq_l_8(const RobotData &data, RobotState *robotState, SequenceState *seque
     return helper_moveBackwardHeading(data, robotState, sequenceState, 800);
 }
 bool seq_l_9(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 2000);
+    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 1000);
 }
 bool seq_l_10(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
     return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
@@ -118,16 +118,16 @@ bool seq_l_38(const RobotData &data, RobotState *robotState, SequenceState *sequ
     return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
 }
 bool seq_l_39(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_setServo(data, robotState, sequenceState, SERVO_MIN, 2000);
+    return helper_setServo(data, robotState, sequenceState, SERVO_MIN, 800);
 }
 bool seq_l_40(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_moveBackwardHeading(data, robotState, sequenceState, 800);
+    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 1000);
 }
 bool seq_l_41(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
+    return helper_moveBackwardHeading(data, robotState, sequenceState, 800);
 }
 bool seq_l_42(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 1000);
+    return helper_moveTillObstacle(data, robotState, sequenceState, -90.0);
 }
 bool seq_l_43(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
     return helper_turnToHeading(data, robotState, sequenceState, -TURN_SPEED, TURN_SPEED);
