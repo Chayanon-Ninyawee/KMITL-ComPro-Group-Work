@@ -28,7 +28,7 @@ bool seq_r_8(const RobotData &data, RobotState *robotState, SequenceState *seque
     return helper_moveBackwardHeading(data, robotState, sequenceState, 800);  // Unchanged
 }
 bool seq_r_9(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 2000);  // Unchanged
+    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 1000);  // Unchanged
 }
 bool seq_r_10(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
     return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);  // Flipped heading
@@ -118,16 +118,16 @@ bool seq_r_38(const RobotData &data, RobotState *robotState, SequenceState *sequ
     return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);  // Flipped turn
 }
 bool seq_r_39(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_setServo(data, robotState, sequenceState, SERVO_MIN, 2000);  // Unchanged
+    return helper_setServo(data, robotState, sequenceState, SERVO_MIN, 800);  // Unchanged
 }
 bool seq_r_40(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_moveBackwardHeading(data, robotState, sequenceState, 800);  // Unchanged
+    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 500);  // Unchanged
 }
 bool seq_r_41(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);  // Flipped heading
+    return helper_moveBackwardHeading(data, robotState, sequenceState, 800);  // Unchanged
 }
 bool seq_r_42(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_setServo(data, robotState, sequenceState, SERVO_MAX, 1000);  // Unchanged
+    return helper_moveTillObstacle(data, robotState, sequenceState, 90.0);  // Flipped heading
 }
 bool seq_r_43(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
     return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);  // Flipped turn
@@ -205,7 +205,7 @@ bool seq_r_67(const RobotData &data, RobotState *robotState, SequenceState *sequ
     return helper_wait(data, robotState, sequenceState, 300);  // Unchanged
 }
 bool seq_r_68(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
-    return helper_moveForTime(data, robotState, sequenceState, 750, 90.0);  // Flipped heading
+    return helper_moveForTime(data, robotState, sequenceState, 710, 90.0);  // Flipped heading
 }
 bool seq_r_69(const RobotData &data, RobotState *robotState, SequenceState *sequenceState) {
     return helper_turnToHeading(data, robotState, sequenceState, TURN_SPEED, -TURN_SPEED);  // Flipped turn
