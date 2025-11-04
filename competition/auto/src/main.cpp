@@ -17,8 +17,8 @@
 constexpr byte BUTTON_PIN = 12;
 
 constexpr byte SERVO_PIN = A0;
-constexpr double SERVO_MIN = 20;
-constexpr double SERVO_MAX = 140;
+constexpr double SERVO_MIN = 36;
+constexpr double SERVO_MAX = 150;
 
 constexpr byte MOTOR_LEFT_1 = 7;
 constexpr byte MOTOR_LEFT_2 = 8;
