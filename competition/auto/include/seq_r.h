@@ -79,6 +79,7 @@ bool seq_r_73(const RobotData &data, RobotState *robotState, SequenceState *sequ
 bool seq_r_74(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
 bool seq_r_75(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
 bool seq_r_76(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
+bool seq_r_77(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
 
 const SequenceStep script[] = {{seq_r_0},  {seq_r_1},  {seq_r_2},  {seq_r_3},  {seq_r_4},  {seq_r_5},  {seq_r_6},  {seq_r_7},  {seq_r_8},
                                {seq_r_9},  {seq_r_10}, {seq_r_11}, {seq_r_12}, {seq_r_13}, {seq_r_14}, {seq_r_15}, {seq_r_16}, {seq_r_17},
@@ -88,4 +89,4 @@ const SequenceStep script[] = {{seq_r_0},  {seq_r_1},  {seq_r_2},  {seq_r_3},  {
                                {seq_r_45}, {seq_r_46}, {seq_r_47}, {seq_r_48}, {seq_r_49}, {seq_r_50}, {seq_r_51}, {seq_r_52}, {seq_r_53},
                                {seq_r_54}, {seq_r_55}, {seq_r_56}, {seq_r_57}, {seq_r_58}, {seq_r_59}, {seq_r_60}, {seq_r_61}, {seq_r_62},
                                {seq_r_63}, {seq_r_64}, {seq_r_65}, {seq_r_66}, {seq_r_67}, {seq_r_68}, {seq_r_69}, {seq_r_70}, {seq_r_71},
-                               {seq_r_72}, {seq_r_73}, {seq_r_74}, {seq_r_75}, {seq_r_76}};
+                               {seq_r_72}, {seq_r_73}, {seq_r_74}, {seq_r_75}, {seq_r_76}, {seq_r_77}};
