@@ -74,11 +74,6 @@ bool seq_l_68(const RobotData &data, RobotState *robotState, SequenceState *sequ
 bool seq_l_69(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
 bool seq_l_70(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
 bool seq_l_71(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
-bool seq_l_72(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
-bool seq_l_73(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
-bool seq_l_74(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
-bool seq_l_75(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
-bool seq_l_76(const RobotData &data, RobotState *robotState, SequenceState *sequenceState);
 
 const SequenceStep script[] = {{seq_l_0},  {seq_l_1},  {seq_l_2},  {seq_l_3},  {seq_l_4},  {seq_l_5},  {seq_l_6},  {seq_l_7},  {seq_l_8},
                                {seq_l_9},  {seq_l_10}, {seq_l_11}, {seq_l_12}, {seq_l_13}, {seq_l_14}, {seq_l_15}, {seq_l_16}, {seq_l_17},
@@ -87,5 +82,4 @@ const SequenceStep script[] = {{seq_l_0},  {seq_l_1},  {seq_l_2},  {seq_l_3},  {
                                {seq_l_36}, {seq_l_37}, {seq_l_38}, {seq_l_39}, {seq_l_40}, {seq_l_41}, {seq_l_42}, {seq_l_43}, {seq_l_44},
                                {seq_l_45}, {seq_l_46}, {seq_l_47}, {seq_l_48}, {seq_l_49}, {seq_l_50}, {seq_l_51}, {seq_l_52}, {seq_l_53},
                                {seq_l_54}, {seq_l_55}, {seq_l_56}, {seq_l_57}, {seq_l_58}, {seq_l_59}, {seq_l_60}, {seq_l_61}, {seq_l_62},
-                               {seq_l_63}, {seq_l_64}, {seq_l_65}, {seq_l_66}, {seq_l_67}, {seq_l_68}, {seq_l_69}, {seq_l_70}, {seq_l_71},
-                               {seq_l_72}, {seq_l_73}, {seq_l_74}, {seq_l_75}, {seq_l_76}};
+                               {seq_l_63}, {seq_l_64}, {seq_l_65}, {seq_l_66}, {seq_l_67}, {seq_l_68}, {seq_l_69}, {seq_l_70}, {seq_l_71}};

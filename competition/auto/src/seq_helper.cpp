@@ -30,7 +30,7 @@ bool helper_turnToHeading(const RobotData &data, RobotState *robotState, Sequenc
     diff = fmod(diff + 180.0, 360.0) - 180.0f;
 
     // Check if we are within the tolerance
-    if (abs(diff) <= 35.0) {
+    if (abs(diff) <= 30.0) {
         robotMotors.stop();
         return true;  // Step is complete
     }
