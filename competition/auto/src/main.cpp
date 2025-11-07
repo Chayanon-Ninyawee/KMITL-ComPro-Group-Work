@@ -6,12 +6,21 @@
 #include "gyro_tracker.h"
 #include "motor_controller.h"
 
-// #define USE_LEFT_SCRIPT
+#define USE_LEFT_SCRIPT
+// #define USE_STOP
 
 #if defined(USE_LEFT_SCRIPT)
+#if defined(USE_STOP)
+#include "seq_l_stop.h"
+#else
 #include "seq_l.h"
+#endif
+#else
+#if defined(USE_STOP)
+#include "seq_r_stop.h"
 #else
 #include "seq_r.h"
+#endif
 #endif
 
 constexpr byte BUTTON_PIN = 12;
