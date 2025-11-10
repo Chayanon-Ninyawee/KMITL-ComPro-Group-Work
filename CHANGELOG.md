@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.1.1](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/compare/v0.1.0...v0.1.1) (2025-11-10)
+
+
+### Bug Fixes
+
+* Add go to stop flag for preprocessor ([f0427af](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/commit/f0427af8470b080b929edf43b1d77046126bdcde))
+* Add wheel model to manual robot ([f8fd22c](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/commit/f8fd22c353f0e72250661d0a4f262d044885e518))
+* Fix auto robot code ([a5e75ae](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/commit/a5e75ae5d9c1abeefabb9d94dc41f2e19f389f87))
+* Fix manual arm servo holder ([e830d92](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/commit/e830d92fa24648d22a83b1d65d5ecb6a9eb8c72e))
+
+
+### Miscellaneous Tasks
+
+* Re-slice the arm servo holder ([19d4d79](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/commit/19d4d793ed160b8a61a2a55f5e3b765c3294b4eb))
+
 ## [0.1.0](https://github.com/Chayanon-Ninyawee/KMITL-ComPro-Group-Work/compare/v0.0.0...v0.1.0) (2025-11-04)
 
 
